@@ -5,6 +5,14 @@
 //Include eeprom.h for AVR (Uno, Nano) etc. except ATTiny
 #include <EEPROM.h>
 
+//Constants
+#define dataTemperature 0
+#define dataLuminosity  1
+#define dataMoisture    2
+#define typeByte  0
+#define typeFloat 1
+#define typeInt   2
+
 /***** Configure the chosen CE,CS pins *****/
 RF24 radio(7,8);
 RF24Network network(radio);
@@ -12,15 +20,21 @@ RF24Mesh mesh(radio,network);
 
 uint32_t displayTimer = 0;
 
-struct rf_data_float {
-  char id;
-  float data;
+union raw_data{
+  byte b[16];
+  float f[4];
+  int16_t i[8];
+};
+// Data structure definition
+struct rf_data_packet {
+  byte id;
+  byte data_type;
+  byte data_format;
+  byte data_size;
+  raw_data data;
 };
 
-struct rf_data_int {
-  char id;
-  int data;
-};
+byte data_buffer[20];
 
 void setup() {
   Serial.begin(115200);
@@ -54,13 +68,25 @@ void loop() {
     
     switch(header.type){
       //case 'M': network.read(header,&dat,sizeof(dat)); Serial.println(dat); break;
-      case 'F':
-        rf_data_float rfd;
-        network.read(header,&rfd,sizeof(rfd));
-        Serial.print("F : ");
-        Serial.print(rfd.id,DEC);
-        Serial.print("=");
-        Serial.println(rfd.data);
+      case 'S':
+        float temp;
+        rf_data_packet rfd;
+        network.read(header,&data_buffer,20);
+        rfd = debuild_packet(data_buffer);
+        //Serial.print("F : ");
+        //Serial.print(rfd.id,DEC);
+        //Serial.print("=");
+        
+        if(rfd.data_format == typeFloat){
+          temp = rfd.data.f[1];
+          //Serial.print("FLT");
+          Serial.println(rfd.data.f[0]);
+        } else if(rfd.data_format == typeInt){
+          //Serial.print("INT");
+          Serial.println(rfd.data.i[0]);
+        }
+        
+        
         break;
       default: network.read(header,0,0); Serial.println(header.type);break;
     }
@@ -79,3 +105,17 @@ void loop() {
     Serial.println(F("**********************************"));
   }
 }
+
+
+rf_data_packet debuild_packet(byte *data_buffer){
+  rf_data_packet rfd;
+  rfd.id = data_buffer[0];
+  rfd.data_type = data_buffer[1];
+  rfd.data_format = data_buffer[2];
+  rfd.data_size = data_buffer[3];
+  for(int i=0; i < 16; i++){
+    rfd.data.b[i] = data_buffer[4+i];
+  }
+  return rfd;
+}
+

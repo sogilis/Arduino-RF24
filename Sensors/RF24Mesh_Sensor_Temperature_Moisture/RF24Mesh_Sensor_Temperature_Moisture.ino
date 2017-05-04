@@ -5,7 +5,7 @@
 #include <OneWire.h>
 
 //Constants
-#define nodeID 10
+#define nodeID 11
 #define dataTemperature 0
 #define dataLuminosity  1
 #define dataMoisture    2
@@ -37,10 +37,14 @@ struct rf_data_packet {
 uint32_t sendTimer = 0;
 rf_data_packet rf_data_temperature;
 rf_data_packet rf_data_luminosity;
+rf_data_packet rf_data_moisture;
 OneWire  ds(2);
-const int analogLuminosityPin = A0;
+const int analogMoisturePin = A0;
+const int analogLuminosityPin = A1;
 byte data_buffer_1[20];
 byte data_buffer_2[20];
+byte data_buffer_3[20];
+bool send_fail = false;
 
 //bool getTemperature(float *temperature);
 
@@ -60,6 +64,11 @@ void setup() {
   rf_data_luminosity.data_type = dataLuminosity;
   rf_data_luminosity.data_format = typeInt;
   rf_data_luminosity.data_size = 1;
+
+  rf_data_moisture.id = nodeID;
+  rf_data_moisture.data_type = dataMoisture;
+  rf_data_moisture.data_format = typeInt;
+  rf_data_moisture.data_size = 1;
 }
 
 void loop() {
@@ -74,13 +83,18 @@ void loop() {
       return;
     }
     rf_data_luminosity.data.i[0] = analogRead(analogLuminosityPin);
+    rf_data_moisture.data.i[0] = analogRead(analogMoisturePin);
 
     // Send an 'T' type message containing the current Temperature
     build_packet(data_buffer_1, rf_data_temperature);
     build_packet(data_buffer_2, rf_data_luminosity);
-    if (!mesh.write(&data_buffer_1, 'S', 20) ||
-        !mesh.write(&data_buffer_2, 'S', 20)) {
-
+    build_packet(data_buffer_3, rf_data_moisture);
+    send_fail |= !mesh.write(&data_buffer_1, 'S', 20);
+    //delay(250);
+    send_fail |= !mesh.write(&data_buffer_2, 'S', 20);
+    //delay(250);
+    send_fail |= !mesh.write(&data_buffer_3, 'S', 20);
+    if (send_fail) {
       // If a write fails, check connectivity to the mesh network
       if ( ! mesh.checkConnection() ) {
         //refresh the network address
@@ -92,6 +106,7 @@ void loop() {
     } else {
       Serial.print("Send OK Temp: "); Serial.println(rf_data_temperature.data.f[0]);
       Serial.print("Send OK Light: "); Serial.println(rf_data_luminosity.data.i[0]);
+      Serial.print("Send OK Moisture: "); Serial.println(rf_data_moisture.data.i[0]);
     }
   }
 }
@@ -106,33 +121,14 @@ void build_packet(byte* data_buffer, rf_data_packet packet){
   }
 }
 
-bool getAddr(byte addr[8]){
-  
-}
-
 bool getTemperature(float *temperature){
   byte i;
   byte present = 0;
   byte data[12];
-  byte addr[8] = {0x28, 0xff, 0x8C, 0x42, 0xB3, 0x16, 0x4, 0x3A};
+  byte addr[8] = {0x28, 0xBC, 0xA3, 0x6A, 0x8, 0x0, 0x0, 0xB7};
   //28 FF 8C 42 B3 16 4 3A
 
-  
-  /*if ( !ds.search(addr)) {
-    Serial.println("No more addresses.");
-    //Serial.println(addr);
-    ds.reset_search();
-    delay(250);
-    return false;
-  }*/
-  /*ds.reset_search();
-  delay(250);
-  if (!ds.search(addr)) {
-    // Pas de capteur
-    Serial.println(("pas de capteur"));
-    return false;
-  }*/
-  
+ 
   if (OneWire::crc8(addr, 7) != addr[7]) {
       Serial.println("CRC is not valid!");
       return false;
