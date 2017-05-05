@@ -12,7 +12,7 @@
 #define typeByte  0
 #define typeFloat 1
 #define typeInt   2
-#define updateFrequencyMs 1000
+#define updateFrequencyMs 10000
 
 // Configure the nrf24l01 CE and CS pins
 RF24 radio(7, 8);
@@ -126,9 +126,8 @@ bool getTemperature(float *temperature){
   byte present = 0;
   byte data[12];
   byte addr[8] = {0x28, 0xBC, 0xA3, 0x6A, 0x8, 0x0, 0x0, 0xB7};
-  //28 FF 8C 42 B3 16 4 3A
+  //28 BC A3 6A 8 0 0 B7
 
- 
   if (OneWire::crc8(addr, 7) != addr[7]) {
       Serial.println("CRC is not valid!");
       return false;

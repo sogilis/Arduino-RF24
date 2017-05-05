@@ -12,7 +12,7 @@
 #define typeByte  0
 #define typeFloat 1
 #define typeInt   2
-#define updateFrequencyMs 1000
+#define updateFrequencyMs 10000
 
 // Configure the nrf24l01 CE and CS pins
 RF24 radio(7, 8);
@@ -116,22 +116,6 @@ bool getTemperature(float *temperature){
   byte data[12];
   byte addr[8] = {0x28, 0xff, 0x8C, 0x42, 0xB3, 0x16, 0x4, 0x3A};
   //28 FF 8C 42 B3 16 4 3A
-
-  
-  /*if ( !ds.search(addr)) {
-    Serial.println("No more addresses.");
-    //Serial.println(addr);
-    ds.reset_search();
-    delay(250);
-    return false;
-  }*/
-  /*ds.reset_search();
-  delay(250);
-  if (!ds.search(addr)) {
-    // Pas de capteur
-    Serial.println(("pas de capteur"));
-    return false;
-  }*/
   
   if (OneWire::crc8(addr, 7) != addr[7]) {
       Serial.println("CRC is not valid!");

@@ -69,24 +69,10 @@ void loop() {
     switch(header.type){
       //case 'M': network.read(header,&dat,sizeof(dat)); Serial.println(dat); break;
       case 'S':
-        float temp;
         rf_data_packet rfd;
         network.read(header,&data_buffer,20);
         rfd = debuild_packet(data_buffer);
-        //Serial.print("F : ");
-        //Serial.print(rfd.id,DEC);
-        //Serial.print("=");
-        
-        if(rfd.data_format == typeFloat){
-          temp = rfd.data.f[1];
-          //Serial.print("FLT");
-          Serial.println(rfd.data.f[0]);
-        } else if(rfd.data_format == typeInt){
-          //Serial.print("INT");
-          Serial.println(rfd.data.i[0]);
-        }
-        
-        
+        print_packet_serial(rfd);
         break;
       default: network.read(header,0,0); Serial.println(header.type);break;
     }
@@ -106,7 +92,6 @@ void loop() {
   }
 }
 
-
 rf_data_packet debuild_packet(byte *data_buffer){
   rf_data_packet rfd;
   rfd.id = data_buffer[0];
@@ -117,5 +102,28 @@ rf_data_packet debuild_packet(byte *data_buffer){
     rfd.data.b[i] = data_buffer[4+i];
   }
   return rfd;
+}
+
+void print_packet_serial(rf_data_packet rfd){
+  Serial.print('/');
+  Serial.print(rfd.id);
+  switch(rfd.data_type){
+    case dataTemperature:
+      Serial.print("/temperature");
+    break;
+    case dataLuminosity:
+      Serial.print("/luminosity");
+    break;
+    case dataMoisture:
+      Serial.print("/moisture");
+    break;
+  }
+  Serial.print('/');
+
+  if(rfd.data_format == typeFloat){
+    Serial.println(rfd.data.f[0]);
+  } else if(rfd.data_format == typeInt){
+    Serial.println(rfd.data.i[0]);
+  }
 }
 
