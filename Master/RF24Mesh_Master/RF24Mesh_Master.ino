@@ -9,6 +9,8 @@
 #define dataTemperature 0
 #define dataLuminosity  1
 #define dataMoisture    2
+#define orderRelay     0
+#define orderMotorTime 1
 #define typeByte  0
 #define typeFloat 1
 #define typeInt   2
@@ -35,14 +37,14 @@ struct rf_data_packet {
 };
 struct rf_order_packet {
   byte id;
-  byte data_type;
-  byte data_format;
-  byte data_size;
-  raw_data data;
+  byte order_type;
+  byte order_format;
+  byte order_size;
+  raw_data order;
 };
 
 byte data_buffer[20];
-byte data_buffer_send[20];
+byte order_buffer[20];
 rf_order_packet rfo;
 int nodeAddrIndex = 0;
 
@@ -56,12 +58,6 @@ void setup() {
   Serial.println(mesh.getNodeID());
   // Connect to the mesh
   mesh.begin();
-
-  rfo.id = 0; //TODO Master
-  rfo.data_type = 3; //TODO Order
-  rfo.data_format = typeInt; //TODO create another type
-  rfo.data_size = 1;
-  rfo.data.i[0] = 18;
 }
 
 
@@ -78,10 +74,7 @@ void loop() {
   // Check for incoming data from the sensors
   if(network.available()){
     RF24NetworkHeader header;
-    network.peek(header);
-
-    float dat=0;
-    
+    network.peek(header);    
     switch(header.type){
       case 'S':
         rf_data_packet rfd;
@@ -98,13 +91,12 @@ void loop() {
     //String relayOn = String("/relay/20/ON");
     input_order = Serial.readStringUntil('\n');
     Serial.println("order received : " + input_order);
-    if(input_order == "/relay/20/ON"){
-      rfo.data.i[0] = 1;
-    }else if(input_order == "/relay/20/OFF"){
-      rfo.data.i[0] = 0;
+    if (parse_order(input_order, &rfo)) {
+      build_packet_order(order_buffer, rfo);
+      Serial.println( mesh.write(&order_buffer, 'O', 20, 20) == 1 ? F("Send OK") : F("Send Fail")); //Sending an message 
+    } else {
+      Serial.println("Parse order failed");
     }
-    build_packet_order(data_buffer_send, rfo);
-    Serial.println( mesh.write(&data_buffer_send, 'O', 20, 20) == 1 ? F("Send OK") : F("Send Fail")); //Sending an message
   }
   if(millis() - displayTimer > 5000){
     displayTimer = millis();
@@ -117,21 +109,6 @@ void loop() {
        Serial.println(mesh.addrList[i].address,OCT);
      }
     Serial.println(F("**********************************"));
-/*
-    //SEND a relay order
-    for (int i = 0; i < mesh.addrListTop; i++) {
-      if (mesh.addrList[i].nodeID == 20) {  //Searching for node 20 from address list
-        nodeAddrIndex = i;
-        break;
-      }
-    }
-    if(nodeAddrIndex != mesh.addrListTop){
-      //RF24NetworkHeader header(mesh.addrList[nodeAddrIndex].address, OCT); //Constructing a header
-      build_packet_order(data_buffer_send, rfo);
-      
-      Serial.println( mesh.write(&data_buffer_send, 'O', 20, 20) == 1 ? F("Send OK") : F("Send Fail")); //Sending an message
-    }
-    */
   }
 }
 
@@ -147,13 +124,13 @@ rf_data_packet debuild_packet(byte *data_buffer){
   return rfd;
 }
 
-void build_packet_order(byte* data_buffer, rf_order_packet packet){
-  data_buffer[0] = packet.id;
-  data_buffer[1] = packet.data_type;
-  data_buffer[2] = packet.data_format;
-  data_buffer[3] = packet.data_size;
+void build_packet_order(byte* order_buffer, rf_order_packet packet){
+  order_buffer[0] = packet.id;
+  order_buffer[1] = packet.order_type;
+  order_buffer[2] = packet.order_format;
+  order_buffer[3] = packet.order_size;
   for(int i=0; i < 16; i++){
-    data_buffer[4+i] = packet.data.b[i];
+    order_buffer[4+i] = packet.order.b[i];
   }
 }
 
@@ -180,3 +157,57 @@ void print_packet_serial(rf_data_packet rfd){
   }
 }
 
+bool parse_order(String sInput, rf_order_packet *rfo)
+{
+  String current_arg;
+  int iPosDelim;
+  int iPosStart = 1;
+  int nodeId;
+  int orderRelayValue;
+  float orderMotor;
+
+  if (sInput[0] != '/') {
+    return false;
+  }
+
+  for (int i = 0; i < 3; i++) {
+    if(i==2){
+      iPosDelim = sInput.length();
+    }else{
+      iPosDelim = sInput.indexOf('/', iPosStart);
+    }
+    if (iPosDelim == -1) {
+      return false;
+    }
+    current_arg = sInput.substring(iPosStart, iPosDelim);
+    iPosStart = iPosDelim + 1;
+    if (i == 0) {
+      nodeId = current_arg.toInt();
+      if (nodeId == 0) {
+        return false;
+      }
+      rfo->id = (byte) nodeId;
+    } else if (i == 1) {
+      if (current_arg == "relay") {
+        rfo->order_type = orderRelay;
+        rfo->order_format = typeByte;
+      } else if (current_arg == "motor") {
+        rfo->order_type = orderMotorTime;
+      } else {
+        return false;
+      }
+    } else if (i == 2) {
+      if (rfo->order_type == orderRelay) {
+        orderRelayValue = current_arg.toInt();
+        rfo->order.b[0] = (byte) orderRelayValue;
+      } else if (rfo->order_type == orderMotorTime) {
+        orderMotor = current_arg.toFloat();
+        if (orderMotor == 0) {
+          return false;
+        }
+        rfo->order.f[0] = orderMotor;
+      }
+    }
+  }
+  return true;
+}
